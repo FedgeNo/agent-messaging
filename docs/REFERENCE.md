@@ -198,7 +198,13 @@ This works on any message in any project. It removes the message together with i
 receipts and delivery records. If the message was an action-item reply, the item is
 kept and its response pointer is cleared. A required reason is written to the event log
 with the message ID and who deleted it, but never the message text. Other agents and the
-owner mailbox are refused. Deletion cannot be undone; take a database backup first if
+owner mailbox are refused.
+
+The service database account is normally limited to SELECT, INSERT and UPDATE, so this
+feature needs an administrator to grant DELETE on exactly three tables:
+`GRANT DELETE ON DBNAME.messages, DBNAME.receipts, DBNAME.deliveries TO 'service'@'localhost';`
+(one GRANT per table in MariaDB). Without it the command reports that permission is missing.
+ Deletion cannot be undone; take a database backup first if
 the content might be needed.
 
 ## Updating a Central Host

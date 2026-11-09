@@ -8,6 +8,8 @@ import secrets
 import time
 import uuid
 
+import pymysql
+
 # Runtimes with no live session to notify; mail for them is only read from the inbox.
 # Any other runtime name is delivered through the matching delivery connector.
 PASSIVE_RUNTIMES = ('mailbox', 'scheduled')
@@ -524,9 +526,15 @@ class Store:
         message = rows[0]
         # An owner's action-item reply is a message; keep the item but drop its pointer.
         self.execute('UPDATE actionItems SET responseMessageId=NULL WHERE responseMessageId=%s', (message['id'],))
-        self.execute('DELETE FROM receipts WHERE messageId=%s', (message['id'],))
-        self.execute('DELETE FROM deliveries WHERE messageId=%s', (message['id'],))
-        self.execute('DELETE FROM messages WHERE id=%s', (message['id'],))
+        try:
+            self.execute('DELETE FROM receipts WHERE messageId=%s', (message['id'],))
+            self.execute('DELETE FROM deliveries WHERE messageId=%s', (message['id'],))
+            self.execute('DELETE FROM messages WHERE id=%s', (message['id'],))
+        except pymysql.err.OperationalError as error:
+            if error.args and error.args[0] == 1142:
+                raise PermissionError('The service database account lacks DELETE on messages, receipts and deliveries; '
+                                      'an administrator must grant it (see docs/REFERENCE.md, Deleting a Message)')
+            raise
         actor = 'admin' if auth['role'] == 'admin' else auth.get('agentId')
         self.event(message['projectKey'], 'message-deleted', (message['id'] + ' by ' + str(actor) + ': ' + reason)[:255])
         return {'deleted': True, 'messageId': message['id'], 'projectKey': message['projectKey']}
