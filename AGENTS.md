@@ -120,6 +120,12 @@ agent-mail action-delete --agent my-agent --item-id ID --expected-version NEW_VE
 You may delete only your own items, and only after recording a verified outcome.
 History is retained.
 
+## Deleting messages
+
+Only the global coordinator can delete a message (`agent-mail delete-message ID --reason TEXT`).
+If you sent something by mistake, send a correction and ask the coordinator; do not try to
+remove it yourself.
+
 ## When things go wrong
 
 - **Service unreachable:** the CLI reports an error; it does not make a local

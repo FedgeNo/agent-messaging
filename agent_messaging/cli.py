@@ -49,6 +49,9 @@ def parser():
     delete.add_argument('--agent')
     delete.add_argument('--item-id', dest='itemId', type=int, required=True)
     delete.add_argument('--expected-version', dest='expectedVersion', type=int, required=True)
+    remove = commands.add_parser('delete-message', help='Coordinator only: permanently delete one message')
+    remove.add_argument('message', metavar='MESSAGE_ID')
+    remove.add_argument('--reason', required=True)
     reply = commands.add_parser('action-reply')
     reply.add_argument('--item-id', dest='itemId', type=int, required=True)
     reply.add_argument('--body-file', required=True)
@@ -130,6 +133,8 @@ def main(argv=None):
         if command in ('action-put', 'action-reply'):
             file = params.pop('body_file')
             params['description' if command == 'action-put' else 'body'] = sys.stdin.read() if file == '-' else Path(file).read_text()
+        if command == 'delete-message':
+            params['messageId'] = params.pop('message')
         if command in ('read', 'receipts'):
             params['agent'] = params['agent'] or client.config.get('agent')
         if command in ('watch', 'wait'):

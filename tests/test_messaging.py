@@ -203,6 +203,45 @@ class MessagingTests(unittest.TestCase):
         defaults.update(params)
         return self.client.call('send', **defaults)
 
+    def test_only_global_coordinator_or_admin_deletes_any_message(self):
+        self.client.call('project', project='global', name='Global')
+        self.client.call('register', project='global', agent='global-coordinator', name='Coordinator', session='coord')
+        self.client.call('register', project='global', agent='user', name='Owner', session='owner')
+        sent = self.send()
+        self.client.call('ack', agent='first', message=sent['id'], note='Read')
+
+        def client_for(project, agent):
+            path = self.root / ('delete-message-' + project + '-' + agent + '.json')
+            token = self.client.call('credential', project=project, agent=agent, role='agent')['token']
+            self.write_config(path, token, project)
+            self.addCleanup(path.unlink)
+            return Client(path)
+
+        for who in (client_for('global', 'user'), client_for('test', 'sender')):
+            with self.assertRaisesRegex(RuntimeError, 'coordinator'):
+                who.call('delete-message', messageId=sent['id'], reason='Not allowed')
+        coordinator = client_for('global', 'global-coordinator')
+        with self.assertRaisesRegex(RuntimeError, 'reason'):
+            coordinator.call('delete-message', messageId=sent['id'], reason='   ')
+        with self.assertRaisesRegex(RuntimeError, 'not found'):
+            coordinator.call('delete-message', messageId='missing', reason='Nope')
+        result = coordinator.call('delete-message', messageId=sent['id'], reason='Obsolete instruction')
+        self.assertTrue(result['deleted'])
+        with self.assertRaisesRegex(RuntimeError, 'not found'):
+            self.client.call('read', message=sent['id'])
+        self.assertFalse(self.client.call('inbox', agent='first', includeAcknowledged=True)['messages'])
+        with self.admin.cursor() as cursor:
+            for table in ('receipts', 'deliveries'):
+                cursor.execute('SELECT COUNT(*) FROM `' + self.name + '`.' + table + ' WHERE messageId=%s', (sent['id'],))
+                self.assertEqual(cursor.fetchone(), (0,))
+            cursor.execute('SELECT reference FROM `' + self.name + '`.events WHERE kind=%s', ('message-deleted',))
+            reference = cursor.fetchone()[0]
+        self.assertIn(sent['id'], reference)
+        self.assertIn('Obsolete instruction', reference)
+        self.assertNotIn('Exact $HOME', reference)
+        again = self.send(agent='sender', to='first')
+        self.assertTrue(self.client.call('delete-message', messageId=again['id'], reason='Admin removal')['deleted'])
+
     def test_round_trip_reply_and_explicit_receipt(self):
         sent = self.send()
         inbox = self.client.call('inbox', agent='first')

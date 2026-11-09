@@ -185,6 +185,22 @@ old superseded notifications are not replayed. Credentials stay in private
 client configuration. In an already-open dashboard composer, Refresh Agents
 reloads the recipient directory.
 
+## Deleting a Message
+
+Messages are kept permanently by default. The global coordinator (the `global-coordinator`
+agent in project `global`) or an administrator can remove one exception:
+
+```sh
+agent-mail delete-message MESSAGE_ID --reason "Obsolete instruction"
+```
+
+This works on any message in any project. It removes the message together with its
+receipts and delivery records. If the message was an action-item reply, the item is
+kept and its response pointer is cleared. A required reason is written to the event log
+with the message ID and who deleted it, but never the message text. Other agents and the
+owner mailbox are refused. Deletion cannot be undone; take a database backup first if
+the content might be needed.
+
 ## Updating a Central Host
 
 Copying source is not enough when the host also has a venv install.

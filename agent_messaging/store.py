@@ -509,10 +509,32 @@ class Store:
         self.event('global', 'action-response', str(item['id']))
         return dict(result, itemId=item['id'])
 
+    def delete_message(self, auth, project, messageId, reason):
+        """Permanently remove one message with its receipts and delivery records.
+
+        Only the global coordinator (or an administrator) may do this. The event log
+        keeps who deleted which message and why, but never the message text."""
+        coordinator = auth['role'] == 'admin' or (auth.get('projectKey') == 'global'
+                                                  and auth.get('agentId') == 'global-coordinator')
+        if not coordinator: raise PermissionError('Only the global coordinator may delete messages')
+        reason = text(reason, 500, True) if reason is not None else ''
+        if not reason.strip(): raise ValueError('A reason is required to delete a message')
+        rows = self.rows('SELECT id,projectKey,senderProject,senderId,recipient FROM messages WHERE id=%s FOR UPDATE', (str(messageId),))
+        if not rows: raise ValueError('Message not found')
+        message = rows[0]
+        # An owner's action-item reply is a message; keep the item but drop its pointer.
+        self.execute('UPDATE actionItems SET responseMessageId=NULL WHERE responseMessageId=%s', (message['id'],))
+        self.execute('DELETE FROM receipts WHERE messageId=%s', (message['id'],))
+        self.execute('DELETE FROM deliveries WHERE messageId=%s', (message['id'],))
+        self.execute('DELETE FROM messages WHERE id=%s', (message['id'],))
+        actor = 'admin' if auth['role'] == 'admin' else auth.get('agentId')
+        self.event(message['projectKey'], 'message-deleted', (message['id'] + ' by ' + str(actor) + ': ' + reason)[:255])
+        return {'deleted': True, 'messageId': message['id'], 'projectKey': message['projectKey']}
+
     def dispatch(self, auth, action, params):
         methods = {'project': self.project, 'credential': self.credential, 'register': self.register, 'alias': self.set_alias,
                    'retire': self.retire, 'restore-agent': self.restore_agent,
-                   'actions': self.actions, 'action-put': self.action_put, 'action-reply': self.action_reply, 'action-delete': self.action_delete,
+                   'actions': self.actions, 'action-put': self.action_put, 'action-reply': self.action_reply, 'action-delete': self.action_delete, 'delete-message': self.delete_message,
                    'status': self.status, 'info': self.info, 'agents': self.agents, 'directory': self.directory, 'send': self.send, 'read': self.read,
                    'inbox': self.inbox, 'ack': self.ack, 'receipts': self.receipts, 'revision': self.revision,
                    'claim': self.claim, 'delivered': self.delivered, 'retry': self.retry, 'history': self.history,
