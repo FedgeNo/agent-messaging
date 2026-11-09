@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent-messaging"
+version = "0.1.0"
+description = "Private durable communication for project agents"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.9"
+dependencies = ["PyMySQL>=1.1,<2"]
+
+[project.scripts]
+agent-mail = "agent_messaging.cli:main"
+
+[tool.setuptools.package-data]
+agent_messaging = ["schema.sql"]
+
+[tool.setuptools.packages.find]
+include = ["agent_messaging*"]

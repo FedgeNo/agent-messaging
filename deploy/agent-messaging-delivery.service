@@ -1,0 +1,18 @@
+[Unit]
+Description=Deliver durable mail notifications to live agent sessions
+After=agent-messaging.service
+Requires=agent-messaging.service
+
+[Service]
+Type=simple
+ExecStart=/opt/agent-messaging/.venv/bin/python -m agent_messaging.delivery --config /etc/agent-messaging/delivery.json
+WorkingDirectory=/opt/agent-messaging
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+MemoryMax=128M
+
+[Install]
+WantedBy=multi-user.target

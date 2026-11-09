@@ -1,0 +1,23 @@
+[Unit]
+Description=Central private agent messaging
+After=mariadb.service
+Requires=mariadb.service
+
+[Service]
+Type=simple
+User=agent-messaging
+Group=agent-messaging
+ExecStart=/opt/agent-messaging/.venv/bin/python -m agent_messaging.server --config /etc/agent-messaging/server.json
+WorkingDirectory=/opt/agent-messaging
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+MemoryMax=256M
+TasksMax=96
+
+[Install]
+WantedBy=multi-user.target
