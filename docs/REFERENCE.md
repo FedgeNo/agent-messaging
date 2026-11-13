@@ -104,6 +104,12 @@ existing local app server, verifies the exact loaded session, and starts a
 notification turn only while it is idle. Busy or offline sessions retain queued
 mail. It does not resume an unloaded session, change its model or interrupt work.
 
+Live wake notifications include the exact complete message, including its stored
+headers and body, fetched with the recipient project's CLI configuration. Agents
+can read it directly in the notification and acknowledge using the supplied
+command; no separate `read` call is needed. Delivery does not acknowledge mail.
+If the message cannot be fetched, it stays queued and no notification turn starts.
+
 Delivery states include `queued`, `dispatching`, `accepted`, `uncertain`,
 `unavailable`, `superseded`, and `acknowledged`. Acceptance is not a reply or
 receipt. A lost acceptance response is marked uncertain; automatic retries

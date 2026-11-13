@@ -444,10 +444,25 @@ class MessagingTests(unittest.TestCase):
 
 
 class DeliveryTests(unittest.TestCase):
+    def test_notification_includes_exact_mail_and_receipt_commands(self):
+        from agent_messaging.delivery import notification
+        raw = 'Message-ID: one\r\nSubject: Test\r\n\r\nExact body $HOME `code` — Ω\r\n'
+        delivery = {'senderProject': 'alpha', 'senderId': 'sender', 'projectKey': 'alpha', 'agentId': 'first', 'messageId': 'one'}
+        with patch('agent_messaging.delivery.Client') as client:
+            client.return_value.call.return_value = {'rawText': raw}
+            prompt = notification(delivery, {'projectConfigs': {'alpha': '/private/client.json'}})
+        self.assertIn(raw, prompt)
+        self.assertIn('ack one --agent first', prompt)
+        self.assertIn('--in-reply-to one', prompt)
+        self.assertNotIn(' read one ', prompt)
+        client.return_value.call.assert_called_once_with('read', project='alpha', message='one', agent='first')
+
     def test_owner_mail_is_identified_separately_from_agent_coordination(self):
         from agent_messaging.delivery import notification
         delivery = {'senderProject': 'global', 'senderId': 'user', 'projectKey': 'alpha', 'agentId': 'first', 'messageId': 'one'}
-        prompt = notification(delivery, {'projectConfigs': {'alpha': '/private/client.json'}})
+        with patch('agent_messaging.delivery.Client') as client:
+            client.return_value.call.return_value = {'rawText': 'Owner message'}
+            prompt = notification(delivery, {'projectConfigs': {'alpha': '/private/client.json'}})
         self.assertIn('owner\u2019s personal mailbox', prompt)
         self.assertNotIn('Agent-authored coordination notification', prompt)
 
@@ -465,9 +480,25 @@ class DeliveryTests(unittest.TestCase):
         connection = MagicMock()
         connection.rpc.side_effect = [{'thread': {'status': {'type': 'idle'}}}, TimeoutError()]
         delivery = {'sessionId': 'one', 'projectKey': 'alpha', 'agentId': 'first', 'messageId': 'message'}
-        with patch('agent_messaging.delivery.find_codex', return_value=connection):
+        with patch('agent_messaging.delivery.find_codex', return_value=connection), patch('agent_messaging.delivery.Client') as client:
+            client.return_value.call.return_value = {'rawText': 'Exact message'}
             result = deliver_codex(delivery, {'codexSocketDirectory': '/unused', 'projectConfigs': {'alpha': '/private/client.json'}})
         self.assertEqual(result['state'], 'uncertain')
+
+    def test_mail_fetch_failure_defers_before_starting_a_turn(self):
+        from unittest.mock import MagicMock
+        from agent_messaging.delivery import run_once
+        connection = MagicMock()
+        connection.rpc.return_value = {'thread': {'status': {'type': 'idle'}}}
+        host = MagicMock()
+        delivery = {'id': 1, 'attemptId': 'attempt', 'runtime': 'codex', 'sessionId': 'one',
+                    'projectKey': 'alpha', 'agentId': 'first', 'messageId': 'message'}
+        host.call.return_value = {'delivery': delivery}
+        with patch('agent_messaging.delivery.find_codex', return_value=connection), patch('agent_messaging.delivery.Client') as client:
+            client.return_value.call.side_effect = RuntimeError('Mailbox unavailable')
+            run_once(host, {'codexSocketDirectory': '/unused', 'projectConfigs': {'alpha': '/private/client.json'}})
+        self.assertEqual(connection.rpc.call_count, 1)
+        self.assertEqual(host.call.call_args.kwargs['state'], 'queued')
 
 
 if __name__ == '__main__': unittest.main()
